@@ -4,7 +4,17 @@
 #include <stdlib.h> 
 #include <netinet/in.h> 
 #include <string.h> 
+#include <thread>
 #define PORT 80808 
+
+
+// void Send(int new_socket) {
+//     sleep(2);
+//     char *hello = "Hello from server";
+//     send(new_socket , hello , strlen(hello) , 0 ); 
+//     printf("Hello message sent\n");
+
+// }
 int main(int argc, char const *argv[]) 
 { 
     int server_fd, new_socket, valread; 
@@ -43,9 +53,13 @@ int main(int argc, char const *argv[])
         perror("accept"); 
         exit(EXIT_FAILURE); 
     } 
+    // std::thread (Send);
     valread = read( new_socket , buffer, 1024); 
     printf("%s\n",buffer ); 
-    send(new_socket , hello , strlen(hello) , 0 ); 
-    printf("Hello message sent\n"); 
+    // send(new_socket , hello , strlen(hello) , 0 ); 
+    // printf("Hello message sent\n"); 
+
+
+
     return 0; 
 } 
