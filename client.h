@@ -9,6 +9,7 @@ class Client {
     std::string ip_;
     std::vector<std::string> server_ip_vec_;
     std::vector<int> server_port_vec_;
+    int id_;
     int port_;
     int curr_server_id_;
     int sock_;
@@ -17,7 +18,7 @@ class Client {
 public:
 
     Client() {}
-    Client(const char *ip, int port);
+    Client(int id, const char *ip, int port);
     void InitServerAddr(const char * file);
     void SendRequest(const std::string &msg);
 

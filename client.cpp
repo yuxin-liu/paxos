@@ -12,8 +12,8 @@
 #include "client.h"
 
 
-Client::Client(const char *ip, int port) : ip_(ip), curr_server_id_(0), 
-                                 port_(port), seq_(0) {
+Client::Client(int id, const char *ip, int port) : id_(id), ip_(ip), 
+                        curr_server_id_(0), port_(port), seq_(0) {
     // init sock
     struct sockaddr_in address; 
        
@@ -57,10 +57,9 @@ void Client::InitServerAddr(const char * file) {
 }
 
 void Client::SendRequest(const std::string &msg) {
-    std::string send_msg = "";
+    std::string send_msg = "C%" + std::to_string(id_) + ",";
     //e.g.: 0,170.01.01.234,8080,ABC,1\0
     //sender_ID,IP,PORT,sequence number,request
-    send_msg += "0,";
     send_msg += ip_ + ",";
     send_msg += std::to_string(port_) + ",";
     send_msg += std::to_string(seq_) + ",";
@@ -113,9 +112,6 @@ void Client::SendRequest(const std::string &msg) {
             exit(1);
         }
         else if (rv == 0) {
-            curr_server_id_++;
-            if (curr_server_id_ == server_ip_vec_.size())
-                curr_server_id_ = 0;
             continue;
         }
         else {
@@ -134,16 +130,21 @@ void Client::SendRequest(const std::string &msg) {
                 }
             }//receive
 
-            int seq = std::stoi(msg);
-            if (seq == seq_) {
-                // success, ok to send next request
-                seq_++;
-                break;
+            if (msg[0] == 'A') {
+                int seq = std::stoi(msg.substr(1));
+                if (seq == seq_) {
+                    seq_++;
+                    break;
+                }
+                else
+                    continue;
             }
-            else {
-                // receive again
+            else if (msg[0] == 'L') {
+                int id = std::stoi(msg.substr(1));
+                curr_server_id_ = id;
                 continue;
             }
+
         }
 
     }
@@ -157,7 +158,7 @@ int main(int argc, char const *argv[])
         exit(1);
     }
 
-    Client client(argv[1], std::atoi(argv[2]));
+    Client client(std::atoi(argv[1]), argv[2], std::atoi(argv[3]));
     client.InitServerAddr(argv[3]);
 
     client.SendRequest("chat0");
