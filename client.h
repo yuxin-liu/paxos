@@ -14,6 +14,9 @@ class Client {
     int curr_server_id_;
     int sock_;
     int seq_;
+    const double p = 0.1;
+
+    bool SendMessage(const std::string &ip, int port, const std::string &msg);
 
 public:
 
@@ -21,6 +24,7 @@ public:
     Client(int id, const char *ip, int port);
     void InitServerAddr(const char * file);
     void SendRequest(const std::string &msg);
+
 
 
 };
