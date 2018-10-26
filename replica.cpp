@@ -5,10 +5,8 @@
 #include <netinet/in.h> 
 #include <arpa/inet.h> 
 #include <string.h> 
-#include <thread>
 #include <stdlib.h> 
 #include <time.h> 
-
 
 #include "replica.h"
 
@@ -41,7 +39,6 @@ Replica::Replica(int id, int port) : id_(id), chat_log_len_(0), current_view_(-1
         exit(1);
     }
     std::cout << "end init replica " << id_ <<std::endl;
-
 }
 
 void Replica::SendMessage(const std::string &ip, int port, const std::string &msg) {
@@ -51,11 +48,9 @@ void Replica::SendMessage(const std::string &ip, int port, const std::string &ms
         if (rand_num == 0)
             return;
     }
-
     int send_sock = 0; 
     struct sockaddr_in serv_addr;  
-    if ((send_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-    { 
+    if ((send_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
         printf("\n Socket creation error \n"); 
         std::cout << strerror(errno);
         exit(1); 
@@ -74,13 +69,12 @@ void Replica::SendMessage(const std::string &ip, int port, const std::string &ms
 
     if (connect(send_sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) { 
         printf("\nConnection Failed. Sending failed \n");  
+        close(send_sock);
         return;
     }
 
     send(send_sock, msg.c_str(), strlen(msg.c_str()), 0);
     close(send_sock);
-    // std::cout << "end send msg:" << msg << ":to " << ip << ":" << port << std::endl;
-
 }
 
 void Replica::AskForFollow() {
@@ -93,7 +87,6 @@ void Replica::AskForFollow() {
         if (i != id_)
             SendMessage(ip_vec_[i], port_vec_[i], send_msg);
     }
-    // std::cout << "replica " << id_ << " asking for follow done" << std::endl;
 }
 
 void Replica::Decree(int inSlotNum) {
@@ -107,12 +100,11 @@ void Replica::Decree(int inSlotNum) {
         if (id_ != i)
             SendMessage(ip_vec_[i], port_vec_[i], send_msg);
     }
-    // std::cout << "replica " << id_ << " done dcree slot " << inSlotNum << std::endl;
 }
 
 
 void Replica::InitServerAddr(const char * file) {
-    std::cout << "start init server addr for replica " << id_ <<std::endl;
+    std::cout << "init server addr for replica " << id_ <<std::endl;
     std::ifstream in(file);
     if (!in) {
         std::cout << "open file " << file << " failed\n";
@@ -131,7 +123,6 @@ void Replica::InitServerAddr(const char * file) {
     }
     in.close();
     replica_num_ = ip_vec_.size();
-    std::cout << "end init server addr for replica " << id_ <<std::endl;
 }
 
 
@@ -146,6 +137,8 @@ void Replica::StartRun() {
     int timeout_count = 0;
 
     while (true) {
+        if (primary_id_ != id_)
+            supporting_set_.clear();
 
         // check for execution, exe (and send ack to client if I'm leader)
         while (propose_map_.find(chat_log_len_) != propose_map_.end()) {
@@ -227,7 +220,6 @@ void Replica::StartRun() {
                 SendMessage(ip_vec_[primary_id_], port_vec_[primary_id_], send_msg);
             }
             timeout_count = 0;
-
             continue;
         }
 
@@ -258,7 +250,6 @@ void Replica::StartRun() {
         msg.erase(0, msg.find(',') + 1);
 
         if(msg_type == "C") {
-            // std::cout << "@@@receive client request:" << msg << std::endl;
             std::string client_ip = msg.substr(0,msg.find(','));
             msg.erase(0, msg.find(',') + 1);
             int client_port = std::stoi(msg.substr(0,msg.find(',')));
@@ -294,12 +285,12 @@ void Replica::StartRun() {
         }
         else if(msg_type == "I")
         {
-            // std::cout << "@@@receive IAmLeader:" << msg << std::endl;
             int view_num = std::stoi(msg);
             if (view_num <= current_view_)
                 continue;
             else {
                 current_view_ = view_num;
+                supporting_set_.clear();
             }
 
             std::string send_msg = "Y%" + std::to_string(id_) + ",";
@@ -318,15 +309,12 @@ void Replica::StartRun() {
             SendMessage(ip_vec_[primary_id_], port_vec_[primary_id_], send_msg);
         }
         else if(msg_type == "Y") {
-            // std::cout << "@@@receive YouAreLeader:" << msg << std::endl;
             if (supporting_set_.size() > replica_num_ / 2)
                 continue;
             if (supporting_set_.find(sender_ID) != supporting_set_.end())
                 continue;
             supporting_set_.insert(sender_ID);
-            while(!msg.empty())
-            {
-                // decided holes
+            while(!msg.empty()) {
                 int slot = std::stoi(msg.substr(0,msg.find(',')));
                 msg.erase(0, msg.find(',') + 1);
                 if (propose_map_.find(slot) != propose_map_.end()
@@ -388,7 +376,6 @@ void Replica::StartRun() {
         }
         else if(msg_type == "D")
         {
-            // std::cout << "@@@receive Decree:" << msg << std::endl;
             int view_num = std::stoi(msg.substr(0,msg.find(',')));
             msg.erase(0, msg.find(',') + 1);
             if (view_num > current_view_)
@@ -406,6 +393,7 @@ void Replica::StartRun() {
                     delete(propose_map_[slot_num]->value);
                 delete(propose_map_[slot_num]);
             }
+            supporting_set_.clear();
             propose_map_[slot_num] = new ProposedValue();
             propose_map_[slot_num]->slot_id = slot_num;
             propose_map_[slot_num]->view_num = current_view_;
@@ -424,7 +412,6 @@ void Replica::StartRun() {
         }
         else if(msg_type == "A")
         {
-            // std::cout << "@@@receive Accept:" << msg << std::endl;
             int view_num = std::stoi(msg.substr(0,msg.find(',')));
             if (view_num > current_view_)
                 current_view_ = view_num;
@@ -525,8 +512,7 @@ void Replica::StartRun() {
                 }
             }
         }
-        else
-        {
+        else {
             std::cout<<"Wrong message type \n";
             exit(1);
         }
@@ -536,7 +522,6 @@ void Replica::StartRun() {
 
 int main(int argc, char const *argv[]) 
 { 
-
     srand (time(NULL));
     if (argc < 3) {
         std::cout << "replica usage: ./replica <id> <receive_port>" << std::endl;
@@ -545,7 +530,5 @@ int main(int argc, char const *argv[])
     Replica replica(std::atoi(argv[1]), std::atoi(argv[2]));
     replica.InitServerAddr("server.config");
     replica.StartRun();
-
-
     return 0; 
 } 

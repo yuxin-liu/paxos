@@ -7,7 +7,6 @@
 #include <cerrno>
 #include <stdlib.h> 
 #include <time.h> 
-
 #include <fstream>
 #include <iostream>
 
@@ -17,19 +16,14 @@
 Client::Client(int id, const char *ip, int port) : id_(id), ip_(ip), 
                         curr_server_id_(0), port_(port), seq_(0) {
     // init sock
-    struct sockaddr_in address; 
-       
-    // Creating socket file descriptor 
+    struct sockaddr_in address;
     if ((sock_ = socket(AF_INET, SOCK_STREAM, 0)) == 0) { 
         perror("socket failed"); 
         exit(EXIT_FAILURE); 
     } 
-       
     address.sin_family = AF_INET; 
     address.sin_addr.s_addr = INADDR_ANY; 
     address.sin_port = htons( port_ ); 
-       
-    // Forcefully attaching socket to the port 8080 
     if (bind(sock_, (struct sockaddr *)&address, sizeof(address))<0) { 
         perror("bind failed"); 
         exit(EXIT_FAILURE); 
@@ -61,15 +55,10 @@ void Client::InitServerAddr(const char * file) {
 }
 
 bool Client::SendMessage(const std::string &ip, int port, const std::string &msg) {
-    std::cout << "send to " << port << ":" << msg << std::endl;
-    // int rand_num = rand() % (int)(1.0/p);
-    // if (rand_num == 0)
-    //     return true;
-
+    std::cout << ">>>>send to "  << ip << ":" << port << ":" << msg << std::endl;
     int send_sock = 0; 
     struct sockaddr_in serv_addr;  
-    if ((send_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-    { 
+    if ((send_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
         printf("\n Socket creation error \n"); 
         exit(1); 
     } 
@@ -87,6 +76,7 @@ bool Client::SendMessage(const std::string &ip, int port, const std::string &msg
     std::cout << "send to " << ip << ":" << port << std::endl;
 
     if (connect(send_sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) { 
+        close(send_sock);
         printf("\nConnection Failed, send msg failed \n"); 
         return false; 
     }
@@ -94,14 +84,11 @@ bool Client::SendMessage(const std::string &ip, int port, const std::string &msg
     send(send_sock, msg.c_str(), strlen(msg.c_str()), 0);
     close(send_sock);
 
-    std::cout << "send msg done" << std::endl;
     return true;
 }
 
 void Client::SendRequest(const std::string &msg) {
     std::string send_msg = "C%" + std::to_string(id_) + ",";
-    //e.g.: 0,170.01.01.234,8080,ABC,1\0
-    //sender_ID,IP,PORT,sequence number,request
     send_msg += ip_ + ",";
     send_msg += std::to_string(port_) + ",";
     send_msg += std::to_string(seq_) + ",";
@@ -112,9 +99,8 @@ void Client::SendRequest(const std::string &msg) {
     while(true) {
         if (acked)
             break;
-        // send request to current server leader
         if (fail_count >= 3) {
-            // change leader
+            // tell server to change leader
             std::string send_msg_die = "S%" + std::to_string(id_) + ",";
             send_msg_die += ip_ + ",";
             send_msg_die += std::to_string(port_) + ",";
@@ -136,7 +122,6 @@ void Client::SendRequest(const std::string &msg) {
                     exit(1);
                 }
                 else if (rv_die == 0) {
-                    std::cout << "waiting for new leader timeout" << std::endl;
                     continue;
                 }
                 else {
@@ -146,15 +131,12 @@ void Client::SendRequest(const std::string &msg) {
                     int msg_fd_die = accept(sock_, nullptr, nullptr);
 
                     while(recv(msg_fd_die, &buf_die, 1, MSG_WAITALL) == 1) {
-                        if(buf_die == '\0') {
-                            //end of an message
+                        if(buf_die == '\0')
                             break;
-                        }
-                        else {
+                        else
                             msg_die += buf_die;
-                        }
-                    }//receive
-                    std::cout << "recieved msg:" << msg_die << std::endl;
+                    }
+                    std::cout << "<<<<recieved msg:" << msg_die << std::endl;
                     if (msg_die[0] == 'L') {
                         int id = std::stoi(msg_die.substr(2));
                         curr_server_id_ = id;
@@ -164,14 +146,12 @@ void Client::SendRequest(const std::string &msg) {
                 } 
             }
             fail_count = 0;
-
         }
         if (!SendMessage(server_ip_vec_[curr_server_id_], server_port_vec_[curr_server_id_], send_msg)) {
             fail_count++;
             continue;
         }
-
-
+        // wait for ack
         while (true) {
             int second = 30;
             fd_set fd;
@@ -186,7 +166,7 @@ void Client::SendRequest(const std::string &msg) {
                 exit(1);
             }
             else if (rv == 0) {
-                std::cout << "waiting for ack timeout" << std::endl;
+                std::cout << "ack timeout" << std::endl;
                 fail_count++;
                 if (fail_count >= 3)
                     break;
@@ -199,14 +179,13 @@ void Client::SendRequest(const std::string &msg) {
 
                 while(recv(msg_fd, &buf, 1, MSG_WAITALL) == 1) {
                     if(buf == '\0') {
-                        //end of an message
                         break;
                     }
                     else {
                         msg += buf;
                     }
-                }//receive
-                std::cout << "recieved msg:" << msg << std::endl;
+                }
+                std::cout << "<<<<recieved msg:" << msg << std::endl;
 
                 if (msg[0] == 'A') {
                     int seq = std::stoi(msg.substr(2));
@@ -217,13 +196,9 @@ void Client::SendRequest(const std::string &msg) {
                         break;
                     }
                 }
-
             }
         }
-
-
     }
-
 }
    
 int main(int argc, char const *argv[]) 
